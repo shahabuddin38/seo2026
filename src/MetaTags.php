@@ -427,7 +427,7 @@ class MetaTags implements SeoInterface
 		$out = '';
 		foreach ($tags as $tag)
 		{
-			$out .= PHP_EOL . "<{$tag[0]} ";
+			$out .= PHP_EOL . "<{$tag[0]}";
 
 			foreach ($tag[1] as $a => $v)
 			{
@@ -442,10 +442,10 @@ class MetaTags implements SeoInterface
 				$a = str_replace(['"', "'", '<', '>', ' ', "\t", "\n", "\r"], '', strip_tags($a));
 
 				// Set attr=value
-				$out .= $a .'="'. Utils::escape($v) .'" ';
+				$out .= " {$a}" . '="'. Utils::escape($v) .'"';
 			}
 
-			$out .= "/>";
+			$out .= ">";
 		}
 
 		if ($this->schema !== null) {
