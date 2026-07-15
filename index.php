@@ -1207,11 +1207,45 @@
                         resultBox.innerHTML = '<span>✓ Content matches SEO rules! No validation errors found.</span>';
                     } else {
                         resultBox.className = 'validation-status status-invalid';
-                        resultBox.innerHTML = '<span>✗ Validation errors:</span><ul style="padding-left: 1.5rem; font-size: 0.85rem; width: 100%;">' + data.errors.map(err => '<li>' + err + '</li>').join('') + '</ul>';
+                        let html = '<span>✗ Validation errors:</span><ul style="padding-left: 1.5rem; font-size: 0.85rem; width: 100%;">' + data.errors.map(err => '<li>' + err + '</li>').join('') + '</ul>';
+                        if (type === 'schema') {
+                            html += '<button class="btn btn-secondary" style="margin-top: 1rem; width: 100%; border-color: rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.15); color: white;" onclick="regenerateSchema()">✨ Auto-Fix & Regenerate Schema</button>';
+                        }
+                        resultBox.innerHTML = html;
                     }
                 } else {
                     resultBox.className = 'validation-status status-invalid';
                     resultBox.innerHTML = '<span>✗ Error processing validation: ' + data.error + '</span>';
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function regenerateSchema() {
+            const content = document.getElementById('validator-content').value;
+            try {
+                const response = await fetch('api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'regenerate', content })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('validator-content').value = data.fixedContent;
+                    
+                    const resultBox = document.getElementById('validator-result-box');
+                    if (data.errors === null) {
+                        resultBox.className = 'validation-status status-valid';
+                        resultBox.innerHTML = '<span>✓ Schema has been successfully fixed and regenerated! No validation errors left.</span>';
+                    } else {
+                        resultBox.className = 'validation-status status-invalid';
+                        resultBox.innerHTML = '<span>✗ Schema was regenerated but some errors require manual fixing:</span><ul style="padding-left: 1.5rem; font-size: 0.85rem; width: 100%;">' + data.errors.map(err => '<li>' + err + '</li>').join('') + '</ul>' +
+                        '<button class="btn btn-secondary" style="margin-top: 1rem; width: 100%; border-color: rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.15); color: white;" onclick="regenerateSchema()">✨ Re-attempt Auto-Fix</button>';
+                    }
+                } else {
+                    alert('Error: ' + data.error);
                 }
             } catch (e) {
                 console.error(e);

@@ -222,6 +222,128 @@ switch ($action) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         }
         break;
+
+    case 'regenerate':
+        $content = $input['content'] ?? '';
+        try {
+            $cleanedContent = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '$1', $content);
+            $cleanedContent = preg_replace('/^\s*<script\b[^>]*>/i', '', $cleanedContent);
+            $cleanedContent = preg_replace('/<\/script>\s*$/i', '', $cleanedContent);
+            $cleanedContent = trim($cleanedContent);
+            
+            $data = json_decode($cleanedContent, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception('Invalid JSON: ' . json_last_error_msg());
+            }
+            
+            $fixEntity = function(&$item, $parent = null) use (&$fixEntity) {
+                if (!is_array($item)) return;
+                
+                $type = $item['@type'] ?? '';
+                
+                foreach (['foundingDate', 'datePublished', 'dateModified', 'priceValidUntil'] as $dateKey) {
+                    if (isset($item[$dateKey]) && is_string($item[$dateKey])) {
+                        if (preg_match('/^\d{4}$/', trim($item[$dateKey]))) {
+                            $item[$dateKey] = trim($item[$dateKey]) . '-01-01';
+                        } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}/', $item[$dateKey])) {
+                            $item[$dateKey] = date('Y-m-d');
+                        }
+                    }
+                }
+                
+                if ($type === 'Product' && isset($item['brand'])) {
+                    if (is_array($item['brand']) && ($item['brand']['@type'] ?? '') === 'Brand') {
+                        $item['brand']['@type'] = 'Organization';
+                    }
+                }
+                
+                if ($type === 'AggregateRating' && !isset($item['itemReviewed'])) {
+                    if ($parent && isset($parent['@type'])) {
+                        $item['itemReviewed'] = [
+                            '@type' => $parent['@type'],
+                            'name' => $parent['name'] ?? 'Parent Item'
+                        ];
+                    } else {
+                        $item['itemReviewed'] = [
+                            '@type' => 'Thing',
+                            'name' => 'Reviewed Item'
+                        ];
+                    }
+                }
+                
+                if ($type === 'LocalBusiness' && !isset($item['address'])) {
+                    $item['address'] = [
+                        '@type' => 'PostalAddress',
+                        'streetAddress' => '123 Business Rd',
+                        'addressLocality' => 'City',
+                        'addressRegion' => 'State',
+                        'postalCode' => '10001',
+                        'addressCountry' => 'US'
+                    ];
+                }
+                
+                if (in_array($type, ['LocalBusiness', 'Organization', 'Product', 'SoftwareApplication']) && empty($item['name'])) {
+                    $item['name'] = 'Generated Name';
+                }
+                
+                if (in_array($type, ['SoftwareApplication', 'Product']) && !isset($item['offers'])) {
+                    $item['offers'] = [
+                        [
+                          '@type' => 'Offer',
+                          'price' => '0',
+                          'priceCurrency' => 'USD',
+                          'availability' => 'https://schema.org/InStock'
+                        ]
+                    ];
+                }
+                
+                foreach ($item as $key => &$val) {
+                    if (is_array($val)) {
+                        if (isset($val['@type'])) {
+                            $fixEntity($val, $item);
+                        } else {
+                            foreach ($val as &$subVal) {
+                                if (is_array($subVal) && isset($subVal['@type'])) {
+                                    $fixEntity($subVal, $item);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            
+            if (isset($data['@graph']) && is_array($data['@graph'])) {
+                foreach ($data['@graph'] as &$entity) {
+                    $fixEntity($entity);
+                }
+            } elseif (is_array($data)) {
+                if (isset($data[0])) {
+                    foreach ($data as &$entity) {
+                        $fixEntity($entity);
+                    }
+                } else {
+                    $fixEntity($data);
+                }
+            }
+            
+            $formattedJson = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            $wrappedOutput = "<script type=\"application/ld+json\">\n" . $formattedJson . "\n</script>";
+            
+            $wrappedGraph = $data;
+            if (is_array($wrappedGraph) && !isset($wrappedGraph['@type']) && !isset($wrappedGraph['@graph']) && isset($wrappedGraph[0])) {
+                $wrappedGraph = ['@graph' => $wrappedGraph];
+            }
+            $errors = SchemaValidator::validate($wrappedGraph);
+            
+            echo json_encode([
+                'success' => true,
+                'fixedContent' => $wrappedOutput,
+                'errors' => $errors
+            ]);
+        } catch (\Exception $e) {
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+        break;
         
     default:
         echo json_encode(['error' => 'Unknown action']);
