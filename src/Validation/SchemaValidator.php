@@ -203,7 +203,7 @@ class SchemaValidator
 
 				foreach ($value as $index => $item)
 				{
-					if ( ($nErrors = self::checkType($item, $rule['item_type'], [])) !== null) {
+					if ( ($nErrors = self::checkType($item, $rule['item_type'], $rule)) !== null) {
 						foreach ($nErrors as $error)
 						{
 							$errors[] = "{$prop}[{$index}] {$error}";
@@ -231,7 +231,7 @@ class SchemaValidator
 
 			foreach ($value as $index => $item)
 			{
-				if ( ($nErrors = self::checkType($item, $rule['item_type'], [])) !== null) {
+				if ( ($nErrors = self::checkType($item, $rule['item_type'], $rule)) !== null) {
 					foreach ($nErrors as $error)
 					{
 						$errors[] = "{$prop}[{$index}] {$error}";
@@ -245,6 +245,15 @@ class SchemaValidator
 
 	private static function checkType($value, string $type, array $rule): ?array
 	{
+		if (str_contains($type, '|')) {
+			foreach (explode('|', $type) as $singleType) {
+				if (self::checkType($value, trim($singleType), $rule) === null) {
+					return null;
+				}
+			}
+			return ["must be one of: {$type}"];
+		}
+
 		$errors = [];
 
 		// @ prefixed types, rule file references
@@ -258,8 +267,10 @@ class SchemaValidator
 				$baseRules = array_merge($baseRules, $rule['rules']);
 			}
 
-			// TODO: maybe here we need just to return null when no rules are defined?
 			if (empty($baseRules)) {
+				if ($ruleName === 'Thing') {
+					return null;
+				}
 				return ["no rules found for @{$ruleName}"];
 			}
 
