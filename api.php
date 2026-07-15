@@ -193,7 +193,13 @@ switch ($action) {
         try {
             $errors = null;
             if ($type === 'schema') {
-                $data = json_decode($content, true);
+                // Strip HTML script tags if present
+                $cleanedContent = preg_replace('/<script\b[^>]*>(.*?)<\/script>/is', '$1', $content);
+                $cleanedContent = preg_replace('/^\s*<script\b[^>]*>/i', '', $cleanedContent);
+                $cleanedContent = preg_replace('/<\/script>\s*$/i', '', $cleanedContent);
+                $cleanedContent = trim($cleanedContent);
+
+                $data = json_decode($cleanedContent, true);
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     $errors = ['Invalid JSON format: ' . json_last_error_msg()];
                 } else {
