@@ -203,6 +203,9 @@ switch ($action) {
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     $errors = ['Invalid JSON format: ' . json_last_error_msg()];
                 } else {
+                    if (is_array($data) && !isset($data['@type']) && !isset($data['@graph']) && isset($data[0])) {
+                        $data = ['@graph' => $data];
+                    }
                     $errors = SchemaValidator::validate($data);
                 }
             } elseif ($type === 'robots') {
